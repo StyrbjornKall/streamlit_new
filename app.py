@@ -10,11 +10,11 @@ model_name = 'regressorhead.pt'
 
 @st.cache
 def loadmodel():
-    chemberta = AutoModel.from_pretrained("StyrbjornKall/streamlit_test", use_auth_token=True)
+    chemberta = AutoModel.from_pretrained('seyonec/PubChem10M_SMILES_BPE_450k')
     return chemberta
 
 def loadtokenizer():
-    tokenizer = AutoTokenizer.from_pretrained("StyrbjornKall/streamlit_test", use_auth_token=True)
+    tokenizer = AutoTokenizer.from_pretrained('seyonec/PubChem10M_SMILES_BPE_450k')
     return tokenizer
 
 def buildmodel():
