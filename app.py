@@ -6,71 +6,66 @@ from transformers import AutoModel, AutoTokenizer
 import torch.nn as nn
 from utils.PreProcessData import *
 
-model_path = 'C:/Users/skall/OneDrive - Chalmers/Documents/Ecotoxformer/models/'
-model_name = 'test_model.pt'
+model_name = 'regressorhead.pt'
 
 @st.cache
 def loadmodel():
-    chemberta = AutoModel.from_pretrained('seyonec/PubChem10M_SMILES_BPE_450k')
+    chemberta = AutoModel.from_pretrained("StyrbjornKall/streamlit_test")
     return chemberta
 
 def loadtokenizer():
-    tokenizer = AutoTokenizer.from_pretrained('seyonec/PubChem10M_SMILES_BPE_450k')
+    tokenizer = AutoTokenizer.from_pretrained("StyrbjornKall/streamlit_test")
     return tokenizer
 
 def buildmodel():
-    model = RoBERTa_and_DNN_script(
-            roberta=chemberta,
-            one_hot_enc_len=1,
-            n_hidden_layers=2,
-            layer_sizes=[350,20],
-            dropout=0.2,
-            activation='ReLU',
-            cls_tok=True,
-            add_transformer_layer=False)
-    #model = load_ckp(model_name, model)
+    regressor = DNN_module(1,2,[350,20],0.2,'ReLU',True)
+    regressor = load_ckp(model_name, regressor)
+    model = fishbAIT(chemberta, regressor)
     model.eval()
     return model
 
-class RoBERTa_and_DNN_script(nn.Module):
-    '''
-    Class to build Transformer and DNN structure. Supports maximum 3 hidden layers and RoBERTa transformers.
-    '''
-    def __init__(self, roberta, one_hot_enc_len, n_hidden_layers, layer_sizes, dropout, activation, cls_tok, add_transformer_layer):
-        super(RoBERTa_and_DNN_script, self).__init__()
-        self.roberta = roberta 
+class DNN_module(nn.Module):
+    def __init__(self, one_hot_enc_len, n_hidden_layers, layer_sizes, dropout, activation, cls_tok):
+        super(DNN_module, self).__init__()
         self.one_hot_enc_len = one_hot_enc_len
         self.n_hidden_layers = n_hidden_layers
         self.layer_sizes = layer_sizes
         self.dropout = nn.Dropout(dropout)
         self.cls_tok = cls_tok
-        self.add_layer = add_transformer_layer
-        
-        self.active =  nn.ReLU()
 
+        self.active =  nn.ReLU()
         self.fc1 = nn.Linear(768 + 1 + one_hot_enc_len,  layer_sizes[0]) # This is where we have to add dimensions (+1) to fascilitate the additional parameters
         self.fc2 = nn.Linear(layer_sizes[0],  layer_sizes[1])
         self.fc3 = nn.Linear(layer_sizes[1], 1)
+
+    def forward(self, inputs):
+        if self.n_hidden_layers == 2:
+            x = self.fc1(inputs)
+            x = self.active(x)
+            x = self.dropout(x)
+            x = self.fc2(x)
+            x = self.active(x)
+            x = self.dropout(x)
+            x = self.fc3(x)
         
+        x = x.squeeze()
+        return x
 
+class fishbAIT(nn.Module):
+    def __init__(self, roberta, dnn):
+        super(fishbAIT, self).__init__()
+        self.roberta = roberta 
+        self.dnn = dnn
+        
     def forward(self, sent_id, mask, exposure_duration, one_hot_encoding):
-
         roberta_output = self.roberta(sent_id, attention_mask=mask)[0]#.detach()#[:,0,:]#.detach() # all samples in batch : only CLS embedding : entire embedding dimension
 
         roberta_output = roberta_output[:,0,:]
       
         inputs = torch.cat((roberta_output, torch.t(exposure_duration.unsqueeze(0)), one_hot_encoding), 1)
-
-        x = self.fc1(inputs)
-        x = self.active(x)
-        x = self.dropout(x)
-        x = self.fc2(x)
-        x = self.active(x)
-        x = self.dropout(x)
-        x = self.fc3(x)
+        out = self.dnn(inputs)
         
-        x = x.squeeze()
-        return x
+        return out
 
 def load_ckp(checkpoint_fpath, model):
     checkpoint = torch.load(checkpoint_fpath, map_location='cpu')
