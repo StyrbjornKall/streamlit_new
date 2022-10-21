@@ -74,7 +74,7 @@ def load_ckp(checkpoint_fpath, model):
 
 
 # APP
-st.sidebar.image("utils/logo.jpg", use_column_width=True)
+st.sidebar.image("utils/logo.jpg", use_column_width=True, caption='logo - Generated through DALL-E')
 app_mode = st.sidebar.selectbox('Select Page',['Predict','Documentation'])
 input_type = st.sidebar.checkbox("Batch (.csv) input", key="batch")
 st.title('''fishbAIT''')
